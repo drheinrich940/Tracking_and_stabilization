@@ -1,4 +1,6 @@
 #include <opencv2/opencv.hpp>
+#include <fstream>
+#include <zconf.h>
 
 #define B 0
 #define G 1
@@ -6,10 +8,14 @@
 #define CONTRAST 65
 
 using namespace cv;
+using namespace std;
 
 int main(int, char **) {
 
     Vec3f pixel;
+
+    ofstream stream;
+    stream.open("/dev/ttyACM0"/*, ofstream::out*/);
 
     VideoCapture cap(1); // open the default camera
     if (!cap.isOpened())  // check if we succeeded
@@ -59,18 +65,32 @@ int main(int, char **) {
                 diffX = center->x - barycentre->x;
                 diffY = center->y - barycentre->y;
                 if (diffX > 20) {
-                    printf("%c", 'A' + diffX/10);
+                    char c = (char)('A' + diffX / 25);
+                    cout << c;
+                    stream << c;
                 } else if (diffX < -20) {
-                    printf("%c", 'a' - diffX/10);
-                } else
-                    std::cout << "0";
+                    char c = (char)('L' - diffX / 25);
+                    cout << c;
+                    stream << c;
+                } else {
+                    cout << "L";
+                    stream << "L";
+                }
 
                 if (diffY > 20) {
-                    printf("%c\n", 'A' + diffY / 10);
+                    char c = (char)('a' + diffY / 25);
+                    cout << c;
+                    stream << c;
                 } else if (diffY < -20) {
-                    printf("%c\n", 'a' - diffY / 10);
-                } else
-                    std::cout << "0" << std::endl;
+                    char c = (char)('l' - diffY / 25);
+                    cout << c;
+                    stream << c;
+                } else {
+                    stream << "l";
+                    cout << "l";
+                }
+                stream.flush();
+                cout << endl;
             }
 
             imshow("Mask", mask);
@@ -79,6 +99,7 @@ int main(int, char **) {
         if (waitKey(30) >= 0)
             break;
     }
+    stream.close();
     destroyAllWindows();
     return 0;
 }
