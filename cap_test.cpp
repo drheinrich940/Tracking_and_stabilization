@@ -1,6 +1,5 @@
 #include <opencv2/opencv.hpp>
 #include <fstream>
-#include <zconf.h>
 
 #define B 0
 #define G 1
@@ -10,8 +9,19 @@
 using namespace cv;
 using namespace std;
 
-int main(int, char **) {
+void ecrire(const string &filename, const string &text) {
+    ofstream file;
+    file.open(filename, ios_base::out | ios_base::app);
+    if (!file.is_open()) {
+        cerr << "Impossible d'ouvrir le fichier" << endl;
+        exit(1);
+    }
+    file << text;
+    file.flush();
+    file.close();
+}
 
+int run() {
     Vec3f pixel;
 
     ofstream stream;
@@ -32,13 +42,14 @@ int main(int, char **) {
 
     MatIterator_<Vec3b> it, end;
 
+    int id = 0;
 
     while (true) {
         int sumX = 0, sumY = 0, nbPixels = 0;
         if (cap.read(frame)) {// get a new frame from camera
 
             mask = frame.clone();
-            Point *center = new Point(frame.cols / 2, frame.rows / 2);
+            auto *center = new Point(frame.cols / 2, frame.rows / 2);
             for (it = mask.begin<Vec3b>(), end = mask.end<Vec3b>(); it != end; ++it) {
                 if ((((*it)[R]) - ((*it)[B])) > CONTRAST && (((*it)[R]) - (*it)[G]) > CONTRAST) {
                     (*it)[0] = 255; // accès au B
@@ -62,14 +73,13 @@ int main(int, char **) {
 
             if (barycentre != nullptr) {
                 int diffX, diffY;
+                double hypotenuse;
                 diffX = center->x - barycentre->x;
                 diffY = center->y - barycentre->y;
-                if (diffX > 20) {
-                    char c = (char)('A' + diffX / 25);
-                    cout << c;
-                    stream << c;
-                } else if (diffX < -20) {
-                    char c = (char)('L' - diffX / 25);
+                hypotenuse = sqrt(diffX * diffX + diffY * diffY);
+                ecrire("../joseboveDist", to_string(hypotenuse) + "," + to_string(id) + "\n");
+                if (diffX > 20 || diffX < -20) {    // Si l'écart horizontal entre le centre et le barycentre > 20
+                    auto c = (char) ('L' - diffX / 25);
                     cout << c;
                     stream << c;
                 } else {
@@ -77,12 +87,8 @@ int main(int, char **) {
                     stream << "L";
                 }
 
-                if (diffY > 20) {
-                    char c = (char)('a' + diffY / 25);
-                    cout << c;
-                    stream << c;
-                } else if (diffY < -20) {
-                    char c = (char)('l' - diffY / 25);
+                if (diffY > 20 || diffY < -20) {
+                    auto c = (char) ('l' - diffY / 25);
                     cout << c;
                     stream << c;
                 } else {
@@ -101,5 +107,10 @@ int main(int, char **) {
     }
     stream.close();
     destroyAllWindows();
+    return 0;
+}
+
+int main() {
+    run();
     return 0;
 }
