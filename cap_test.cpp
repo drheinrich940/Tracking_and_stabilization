@@ -4,7 +4,7 @@
 #define B 0
 #define G 1
 #define R 2
-#define CONTRAST 65
+#define CONTRAST 75
 
 using namespace cv;
 using namespace std;
@@ -78,6 +78,7 @@ int run() {
                 diffY = center->y - barycentre->y;
                 hypotenuse = sqrt(diffX * diffX + diffY * diffY);
                 ecrire("../joseboveDist", to_string(hypotenuse) + "," + to_string(id) + "\n");
+                // TODO Utiliser une valeur absolue et utiliser un define
                 if (diffX > 20 || diffX < -20) {    // Si l'écart horizontal entre le centre et le barycentre > 20
                     auto c = (char) ('L' - diffX / 25);
                     cout << c;
@@ -87,8 +88,8 @@ int run() {
                     stream << "L";
                 }
 
-                if (diffY > 20 || diffY < -20) {
-                    auto c = (char) ('l' - diffY / 25);
+                if (diffY > 10 || diffY < -10) {
+                    auto c = (char) ('l' + diffY / 25);
                     cout << c;
                     stream << c;
                 } else {

@@ -1,13 +1,15 @@
+#include <Arduino.h>
 #include <Servo.h>
 
 boolean newData = false;
 char receivedChar = 0, hChar, vChar;
 Servo servoH, servoV;
 int actualPosUpper,actualPosLower;
-int CHARMAX,RANGEMAX;
+int CHARMAX,RANGEMAX,REDUCTIONPID;
 
-//servo horizontale : lower
-//servo verticale : upper
+
+//servo horizontal : lower
+//servo vertical : upper
 void setup(){
   CHARMAX = 'l' - 'a';
   RANGEMAX = 5;
@@ -16,13 +18,9 @@ void setup(){
   servoH.attach(3);
   actualPosUpper = 90;
   actualPosLower = 90;
+  REDUCTIONPID = 1;
   servoV.write(actualPosUpper);
   servoH.write(actualPosLower);
-}
-
-void loop(){
-  receivedChar=0;
-  track();
 }
 
 void readOneChar() {
@@ -34,44 +32,40 @@ void readOneChar() {
 
 void track() {
   readOneChar();
-  
-  int v = 0,h = 0;
-  
+
+  int v = 0, h = 0;
+
   if (newData == false)
-    return;
-    
+  return;
+
+  // Code fonctionnel pour deplacement vertical
   if(receivedChar >= 'a' && receivedChar <= 'z'){
     h = receivedChar - 'a';
-    h = map(h, 0, CHARMAX, 0, RANGEMAX);
 
     if(receivedChar < 'l'){
-       //actualPosUpper += (int)(receivedChar-'a'); 
-       actualPosUpper -= h;
-       //actualPosUpper -= 1;
+      actualPosUpper += (CHARMAX - h) / REDUCTIONPID; // Deplacement vers le haut
     } else if (receivedChar > 'l') {
-       //actualPosUpper -= (int)(receivedChar-'a'); 
-       actualPosUpper += h;
-//       actualPosUpper += 1;
+      actualPosUpper -= (h - CHARMAX) / REDUCTIONPID; // Deplacement vers le bas
     }
-    servoH.write(actualPosUpper); 
+    servoH.write(actualPosUpper);
 
   }
+  
+  // Code fonctionnel pour deplacement horizontal
   else if(receivedChar >= 'A' && receivedChar <= 'Z'){
     v = receivedChar - 'A';
-    v = map(v, 0, CHARMAX, 0, RANGEMAX);
-    
+
     if(receivedChar < 'L'){
-       //actualPosUpper += (int)(receivedChar-'a'); 
-       actualPosLower -= 12 - v;
-       //actualPosLower -= 1;
+      actualPosLower -= (int)((CHARMAX - v)/REDUCTIONPID);  // Deplacement vers la gauche
     } else if (receivedChar > 'L') {
-       //actualPosUpper -= (int)(receivedChar-'a'); 
-       actualPosLower += v;
-       //actualPosLower += 1;
+      actualPosLower += (int)((v - CHARMAX)/REDUCTIONPID);  // Deplacement vers la droite
     }
-    servoV.write(actualPosLower); 
+    servoV.write(actualPosLower);
   }
-  
   newData = false;
 }
 
+void loop(){
+  receivedChar=0;
+  track();
+}
