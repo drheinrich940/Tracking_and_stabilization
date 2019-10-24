@@ -1,13 +1,20 @@
 #include <opencv2/opencv.hpp>
 #include <fstream>
+#include <time.h>
+#include <sys/time.h>
 
 #define B 0
 #define G 1
 #define R 2
 #define CONTRAST 75
-#define SEUIL 20
-#define LAMBDA 3
+#define THRESHOLD 20
+#define LAMBDA - 10.0000000002
 #define PIXEL_AMOUNT 100000
+#define CORNER_THRESHOLD_LOW 255
+#define MOTOR_COMMAND_DIVIDER 1
+#define MOTOR_ORDER_DIVIDER 25
+#define NUMBER_OF_FRAME_BEFORE_MEANING 200
+
 using namespace cv;
 using namespace std;
 
@@ -52,6 +59,13 @@ void meaningImageInTime(Mat &previousFrame, Mat &currentFrame, Mat &targetFrame)
 
 
         }
+    }
+}
+
+void resetArray(int pixelLocation[PIXEL_AMOUNT][2]) {
+    for (int i = 0; i < PIXEL_AMOUNT; ++i) {
+        pixelLocation[i][0] = 0;
+        pixelLocation[i][1] = 0;
     }
 }
 
@@ -126,11 +140,11 @@ extractHarrysKeypoints(Mat &frame, Mat &targetFrame, const int h_mask[3][3], con
                     v_mask[2][1] * frame.at<char>(row_index + 1, col_index) +
                     v_mask[2][2] * frame.at<char>(row_index + 1, col_index + 1));
 
-            pixel_value_horizontal >= SEUIL ? pixel_value_horizontal = pixel_value_horizontal
-                                            : pixel_value_horizontal = 0;
+            pixel_value_horizontal >= THRESHOLD ? pixel_value_horizontal = pixel_value_horizontal
+                                                : pixel_value_horizontal = 0;
 
-            pixel_value_vertical >= SEUIL ? pixel_value_vertical = pixel_value_vertical
-                                          : pixel_value_vertical = 0;
+            pixel_value_vertical >= THRESHOLD ? pixel_value_vertical = pixel_value_vertical
+                                              : pixel_value_vertical = 0;
             if (pixel_value_horizontal > 255)
                 pixel_value_horizontal = 255;
             if (pixel_value_vertical > 255)
@@ -185,11 +199,11 @@ extractHarrysKeypointsLocation(Mat &frame, Mat &targetFrame, int pixelLocation[P
                     v_mask[2][1] * frame.at<char>(row_index + 1, col_index) +
                     v_mask[2][2] * frame.at<char>(row_index + 1, col_index + 1));
 
-            pixel_value_horizontal >= SEUIL ? pixel_value_horizontal = pixel_value_horizontal
-                                            : pixel_value_horizontal = 0;
+            pixel_value_horizontal >= THRESHOLD ? pixel_value_horizontal = pixel_value_horizontal
+                                                : pixel_value_horizontal = 0;
 
-            pixel_value_vertical >= SEUIL ? pixel_value_vertical = pixel_value_vertical
-                                          : pixel_value_vertical = 0;
+            pixel_value_vertical >= THRESHOLD ? pixel_value_vertical = pixel_value_vertical
+                                              : pixel_value_vertical = 0;
             if (pixel_value_horizontal > 255)
                 pixel_value_horizontal = 255;
             if (pixel_value_vertical > 255)
@@ -204,8 +218,12 @@ extractHarrysKeypointsLocation(Mat &frame, Mat &targetFrame, int pixelLocation[P
                                               ((pixel_value_horizontal_squared) * (pixel_value_vertical_squared)) *
                                               (pixel_value_horizontal_squared) * (pixel_value_vertical_squared));
 
-            if (pixel_value_corner > 150 * 150) {
+            if (pixel_value_corner > CORNER_THRESHOLD_LOW) {
+//                cout << pixel_value_corner << endl;
                 pixel_value_corner = 255;
+            } else {
+                pixel_value_corner = 0;
+
             }
             if (pixelCounter < PIXEL_AMOUNT && pixel_value_corner == 255) {
                 // In order to display only them
@@ -238,8 +256,8 @@ void meanMovement(int resultPixelLocation[PIXEL_AMOUNT][2], int resultCoordinate
         resultX += resultPixelLocation[i][0];
         resultY += resultPixelLocation[i][1];
     }
-    resultCoordinate[0] = static_cast<int>(resultX / numberOfKeypointsExtracted);
-    resultCoordinate[1] = static_cast<int>(resultY / numberOfKeypointsExtracted);
+    resultCoordinate[0] = static_cast<int>(resultX / (numberOfKeypointsExtracted * MOTOR_COMMAND_DIVIDER));
+    resultCoordinate[1] = static_cast<int>(resultY / (numberOfKeypointsExtracted * MOTOR_COMMAND_DIVIDER));
 
 }
 
@@ -276,11 +294,11 @@ extractHarrysKeypointsSorted(Mat &frame, Mat &targetFrame, const int horizontal_
                     vertical_mask[2][1] * frame.at<char>(row_index + 1, col_index) +
                     vertical_mask[2][2] * frame.at<char>(row_index + 1, col_index + 1));
 
-            pixel_value_horizontal >= SEUIL ? pixel_value_horizontal = pixel_value_horizontal
-                                            : pixel_value_horizontal = 0;
+            pixel_value_horizontal >= THRESHOLD ? pixel_value_horizontal = pixel_value_horizontal
+                                                : pixel_value_horizontal = 0;
 
-            pixel_value_vertical >= SEUIL ? pixel_value_vertical = pixel_value_vertical
-                                          : pixel_value_vertical = 0;
+            pixel_value_vertical >= THRESHOLD ? pixel_value_vertical = pixel_value_vertical
+                                              : pixel_value_vertical = 0;
 
             long pixel_value_horizontal_squared = pixel_value_horizontal * pixel_value_horizontal;
             long pixel_value_vertical_squared = pixel_value_vertical * pixel_value_vertical;
@@ -327,6 +345,8 @@ int run_harrys2() {
     VideoCapture cap(1); // open the default camera
     if (!cap.isOpened())  // check if we succeeded
         return -1;
+    ofstream stream;
+    stream.open("/dev/ttyACM0"/*, ofstream::out*/);
 
     Mat horizontal_masked_image, frame, greyscale_image, vertical_masked_image, harrys_image;
     int previousPixelLocationTab[PIXEL_AMOUNT][2] = {{0}};
@@ -338,8 +358,14 @@ int run_harrys2() {
 
     cap.set(CV_CAP_PROP_FRAME_WIDTH, 640);  //taille de la fenetre
     cap.set(CV_CAP_PROP_FRAME_HEIGHT, 480); //au dela de 320*240
+//    cap.set(CV_CAP_PROP_FRAME_WIDTH, 1280);  //taille de la fenetre
+//    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 720); //au dela de 320*240
+//    cap.set(CV_CAP_PROP_FRAME_WIDTH, 352);  //taille de la fenetre
+//    cap.set(CV_CAP_PROP_FRAME_HEIGHT, 240); //au dela de 320*240
 
     MatIterator_<Vec3b> it, end;
+    struct timeval tv, tv2;
+
     if (cap.read(frame)) {// get a new frame from camera
 
         cvtColor(frame, greyscale_image, CV_RGB2GRAY);
@@ -347,13 +373,18 @@ int run_harrys2() {
         Mat result_image(frame.rows, frame.cols, CV_8UC1, Scalar(0));
         extractHarrysKeypointsLocation(greyscale_image, result_image, previousPixelLocationTab, horizontal_mask,
                                        vertical_mask);
+        int cpt_frame = 0;
+        double meanElapsedTime = 0.0;
+        double meanKeypoints = 0.0;
 
         while (true) {
+            gettimeofday(&tv, NULL);
             if (cap.read(frame)) {// get a new frame from camera
                 int resultMovementCoordinate[2] = {0};
                 int resultPixelLocationTab[PIXEL_AMOUNT][2] = {{0}};
 
                 cvtColor(frame, greyscale_image, CV_RGB2GRAY);
+
 
                 Mat result_image2(frame.rows, frame.cols, CV_8UC1, Scalar(0));
                 int numberOfKeypointsExtracted = extractHarrysKeypointsLocation(greyscale_image, result_image2,
@@ -361,15 +392,61 @@ int run_harrys2() {
                                                                                 horizontal_mask,
                                                                                 vertical_mask);
                 substractList(currentPixelLocationTab, previousPixelLocationTab, resultPixelLocationTab);
-                copyArray(previousPixelLocationTab, currentPixelLocationTab);
                 meanMovement(resultPixelLocationTab, resultMovementCoordinate, numberOfKeypointsExtracted);
-                cout << "X : " << resultMovementCoordinate[0] << " Y : " << resultMovementCoordinate[1]
-                     << " Number of keypoints extracted : " << numberOfKeypointsExtracted << endl;
-                imshow("Mask", result_image2);
-                imshow("GogolCam", frame);
-//            imshow("GaussianBlur", gaussian_image);
 
+                imshow("Mask", result_image2);
+                imshow("GogolCam", greyscale_image);
+                copyArray(previousPixelLocationTab, currentPixelLocationTab);
+                resetArray(currentPixelLocationTab);
+
+                double diffX = static_cast<double>(resultMovementCoordinate[1]);
+                double diffY = -static_cast<double>(resultMovementCoordinate[0]);
+
+                if (diffX > 20 || diffX < -20) {    // Si l'écart horizontal entre le centre et le barycentre > 20
+                    auto c = (char) ('L' - diffX / MOTOR_ORDER_DIVIDER);
+                    cout << c;
+                    stream << c;
+                } else {
+                    cout << "L";
+                    stream << "L";
+                }
+
+                if (diffY > 10 || diffY < -10) {
+                    auto c = (char) ('l' + diffY / MOTOR_ORDER_DIVIDER);
+                    cout << c;
+                    stream << c;
+                } else {
+                    stream << "l";
+                    cout << "l";
+                }
+                stream.flush();
+                cout << endl;
+//                cout << "X : " << resultMovementCoordinate[1] << " Y : " << resultMovementCoordinate[0]
+//                     << " Number of keypoints extracted : " << numberOfKeypointsExtracted << endl;
+
+                gettimeofday(&tv2, NULL);
+                double timeValue = (((static_cast<double>(tv2.tv_sec) * 1000000) + static_cast<double>(tv2.tv_usec)) -
+                                    ((static_cast<double>(tv.tv_sec) * 1000000) + static_cast<double>(tv.tv_usec))) /
+                                   1000000;
+                cout << "X : " << diffX << " Y : " << diffY
+                     << " Number of keypoints extracted : " << numberOfKeypointsExtracted <<
+                     "\nTime elapsed total for a run : " << timeValue << "s" <<
+                     endl;
+                cpt_frame++;
+                meanElapsedTime += timeValue;
+                meanKeypoints += numberOfKeypointsExtracted;
+                if (cpt_frame > NUMBER_OF_FRAME_BEFORE_MEANING) {
+                    cout << "\n############### MEAN ELAPSED TIME ###############\n" << meanElapsedTime / cpt_frame
+                         << "s"
+                         << "\nFrame rate : " << 1.0 / (meanElapsedTime / cpt_frame) << "Hz"
+                         << "\nImage size : " << greyscale_image.cols << "x" << greyscale_image.rows
+                         << "\nMean number of keypoints : " << meanKeypoints / cpt_frame << endl;
+                    meanElapsedTime = 0.0;
+                    meanKeypoints = 0.0;
+                    cpt_frame = 0;
+                }
             }
+
             if (waitKey(30) >= 0)
                 break;
         }
@@ -422,27 +499,7 @@ int run_harrys() {
 
 }
 
-int main() {
-    run_harrys2();
-
-    std::list<pixel> pixelList;
-//
-//    pixel p1 = std::make_tuple(10, 2, 3);
-//    pixel p2 = std::make_tuple(3, 2, 3);
-//    pixel p3 = std::make_tuple(9, 2, 3);
-//
-//    pixelList.push_back(p1);
-//    p1 = std::make_tuple(20, 2, 3);
-//    pixelList.push_back(p1);
-//    p1 = std::make_tuple(3, 2, 3);
-//
-//    pixelList.push_back(p1);
-//
-//    pixelList.sort([](const pixel &pixel1, const pixel &pixel2) {
-//        return std::get<0>(pixel1) > std::get<0>(pixel2);
-//    });
-//
-//    cout << std::get<0>(pixelList.front()) << endl;
-
-    return 0;
-}
+//int main() {
+//    run_harrys2();
+//    return 0;
+//}
